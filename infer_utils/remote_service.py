@@ -2,7 +2,6 @@ import psutil
 import socket
 import argparse
 from .planner import TrajPlanner
-from ..dataset import AlohaPickPlace0903
 from shm_transport import expose, run_simple_server, setup_log_level
 
 
@@ -31,10 +30,6 @@ def check_ipv4(substr: str):
     return "localhost"
 
 
-import cv2
-import torch
-import numpy as np
-
 class Service(TrajPlanner):
     @expose()
     def get_config(self):
@@ -57,24 +52,16 @@ class Service(TrajPlanner):
         super().add_obs_frame(obs_frame)
     
     @expose()
-    def get_action(self, draw_traj: bool = False):
-        return super().get_action(draw_traj)
+    def get_action(self, draw_traj: bool = False, compress_traj_img: bool = False):
+        return super().get_action(draw_traj, compress_traj_img)
     
     @expose()
-    def get_action_torch(self, draw_traj: bool = False, compress: bool = True):
-        if self.ensemble > 0:
-            torch.manual_seed(0)
-        ret = super().get_action(draw_traj)
-        if ret is None:
-            return ret
-        
-        if ret[-1] is not None and compress:
-            img = ret[-1]
-            if img.dtype == np.float32:
-                img = (img * 255.).clip(0, 255).astype(np.uint8)
-            img = cv2.imencode(".jpg", img)[1]
-            ret = ret[:-1] + (img,)
-        return [torch.from_numpy(x) if isinstance(x, np.ndarray) else x for x in ret]
+    def set_ensemble_nums(self, n: int):
+        return super().set_ensemble_nums(n)
+    
+    @expose()
+    def ensemble_traj(self, future_ee_poses, future_grippers, future_time):
+        return super().ensemble_traj(future_ee_poses, future_grippers, future_time)
 
 
 def run_service():
@@ -84,8 +71,8 @@ def run_service():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--ema", action="store_true", default=False)
-    parser.add_argument("--ckpt", type=str, default="")
-    parser.add_argument("--uri", type=str, default="control_caz")
+    parser.add_argument("--ckpt", type=str, default="", help="ckpt path")
+    parser.add_argument("--uri", type=str, default="e2vla", help="alias name of the hosting object")
     parser.add_argument("--ns_host", type=str, default="localhost", help="naming server host")
     parser.add_argument("--ns_port", type=int, default=9090, help="naming server port")
     parser.add_argument("--host", type=str, default="localhost", help="daemon host")
@@ -97,7 +84,7 @@ def run_service():
 
     service = Service(
         ckpt_path=opt.ckpt, 
-        config=AlohaPickPlace0903.config,
+        config=None,
         device="cuda:0",
         ensemble=opt.ensemble,
         use_ema=opt.ema

@@ -16,7 +16,7 @@ def visualize_traj(
 
     Args:
         data (Dict[str, Tensor]): remove the batch dimension
-        future_ee_states (List[Tensor]): you can plot multiple trajs
+        future_ee_states (List[Tensor]): you can plot multiple trajs, each of shape (Ta, nee, 4*4+1)
         colors (List[Tuple[int, int, int]]): each traj can has different color
 
     Returns:

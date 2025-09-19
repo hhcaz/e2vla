@@ -1,3 +1,4 @@
+import cv2
 import copy
 import torch
 import threading
@@ -231,14 +232,18 @@ class TrajPlanner(object):
             action_full[:, :, ee_ind] = action_selected[:, :, i]
         return action_full
 
-    def get_action(self, draw_traj: bool = False):
+    def get_action(
+        self, 
+        draw_traj: bool = False,
+        compress_traj_img: bool = False
+    ):
         """
         Returns
         -------
             future_ee_poses (np.ndarray): shape (Ta, 4, 4), ^{world} _{ee} T
             future_grippers (np.ndarray): shape (Ta,), range [0 (close), 1 (open)]
             future_time (np.ndarray): shape (Ta,)
-            traj_img (np.ndarray): shape (H, Ncam*W, C)
+            traj_img (np.ndarray | None): shape (H, Ncam*W, C) if not compressed else (nbytes,)
         """
         with self.obs_lock:
             obs_frames = self.obs_frames.copy()  # shallow copy
@@ -255,6 +260,10 @@ class TrajPlanner(object):
                 future_ee_states=[actions[0]],
                 colors=[(0, 0, 255)]
             )
+            if traj_img.dtype == np.float32:
+                traj_img = (traj_img * 255.).clip(0, 255).astype(np.uint8)
+            if compress_traj_img:
+                traj_img = cv2.imencode(".jpg", traj_img)[1]
         else:
             traj_img = None
         
@@ -276,7 +285,18 @@ class TrajPlanner(object):
         future_time = (1 + np.arange(Ta)) * action_dt + latest_time
         future_ee_poses = ee_poses[0]  # (Ta, nee, 4, 4)
         future_grippers = grippers[0]  # (Ta, nee)
-        
+
+        return future_ee_poses, future_grippers, future_time, traj_img
+    
+    def set_ensemble_nums(self, n: int):
+        self.ensemble = n
+
+    def ensemble_traj(
+        self, 
+        future_ee_poses: np.ndarray,
+        future_grippers: np.ndarray,
+        future_time: np.ndarray
+    ):
         if self.ensemble != 0:
             with self.ensembler_lock:
                 future_ee_poses[:, :, :3, 3] = self.pos_ensembler.update(
@@ -288,6 +308,6 @@ class TrajPlanner(object):
                 future_grippers = self.gripper_ensembler.update(
                     future_grippers, future_time, on_SO3=False
                 )
-
-        return future_ee_poses, future_grippers, future_time, traj_img
+        
+        return future_ee_poses, future_grippers, future_time
 
