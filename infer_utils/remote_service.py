@@ -1,5 +1,6 @@
 import psutil
 import socket
+import envars
 import argparse
 from .planner import TrajPlanner
 from shm_transport import expose, run_simple_server, setup_log_level
@@ -84,7 +85,6 @@ def run_service():
 
     service = Service(
         ckpt_path=opt.ckpt, 
-        config=None,
         device="cuda:0",
         ensemble=opt.ensemble,
         use_ema=opt.ema

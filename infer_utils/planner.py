@@ -1,5 +1,7 @@
+import os
 import cv2
 import copy
+import glob
 import torch
 import threading
 import numpy as np
@@ -12,12 +14,33 @@ from data_utils.dataset_base import DataSampler, DataConfig, gen_norm_xy_map, rb
 from train_utils.ema_impl import ExponentialMovingAverage
 from data_utils.datasets import DATA_CONFIGS
 from .draw_traj import visualize_traj
+from configs import TrainConfig
 
+
+def parse_config(ckpt_dir: str):
+    config_files = glob.glob(os.path.join(ckpt_dir, "*.json"))
+    config_files.sort()
+    
+    assert len(config_files), "No config files found in {}".format(ckpt_dir)
+    config_file = config_files[-1]
+    print("[INFO] Use config file {}".format(config_file))
+    
+    cfg = TrainConfig.load(config_file)
+    data_config = cfg.dataset_classes[0].config
+    model_name = cfg.model
+    
+    data_config.shuffle_cameras = False  # overwrite
+    print("[INFO] model = {}".format(model_name))
+    print("[INFO] data config = {}".format(data_config))
+    
+    return model_name, data_config
 
 
 def load_model(path, device, use_ema: bool = False):
+    model_name, data_config = parse_config(os.path.dirname(path))
+    
     ckpt = torch.load(path, map_location=device, weights_only=False)
-    model = vla.vla_base().to(device)
+    model: vla.VLA = getattr(vla, "vla_{}".format(model_name))().to(device)
     model.actor.load_state_dict(ckpt["weights"])
     print("[INFO] Load weights from iter: {}".format(ckpt["current_iters"]))
 
@@ -30,19 +53,18 @@ def load_model(path, device, use_ema: bool = False):
         print("[INFO] EMA weights loaded")
 
     model.eval()
-    return model
+    return model, data_config
 
 
 class TrajPlanner(object):
     def __init__(
         self, 
         ckpt_path: str, 
-        config: DataConfig, 
         device: str = "cuda:0", 
         ensemble: int = -1,
         use_ema: bool = False
     ):
-        self.model = load_model(ckpt_path, device, use_ema)
+        self.model, self.config = load_model(ckpt_path, device, use_ema)
 
         self.ensemble = int(ensemble)
         self.ensembler_lock = threading.Lock()
@@ -55,7 +77,6 @@ class TrajPlanner(object):
         
         self.device = device
         self.last_obs_data = None
-        self.config = config
     
     def reset(self):
         with self.ensembler_lock:
@@ -289,7 +310,11 @@ class TrajPlanner(object):
         return future_ee_poses, future_grippers, future_time, traj_img
     
     def set_ensemble_nums(self, n: int):
-        self.ensemble = n
+        with self.ensembler_lock:
+            self.ensemble = n
+            self.pos_ensembler.reset()
+            self.rot_ensembler.reset()
+            self.gripper_ensembler.reset()
 
     def ensemble_traj(
         self, 
@@ -299,15 +324,15 @@ class TrajPlanner(object):
     ):
         if self.ensemble != 0:
             with self.ensembler_lock:
-                future_ee_poses[:, :, :3, 3] = self.pos_ensembler.update(
-                    future_ee_poses[:, :, :3, 3], future_time, on_SO3=False
+                future_ee_poses[..., :3, 3] = self.pos_ensembler.update(
+                    future_ee_poses[..., :3, 3], future_time, on_SO3=False
                 )
-                # future_ee_poses[:, :, :3, :3] = self.rot_ensembler.update(
-                #     future_ee_poses[:, :, :3, :3], future_time, on_SO3=True
+                # future_ee_poses[..., :3, :3] = self.rot_ensembler.update(
+                #     future_ee_poses[..., :3, :3], future_time, on_SO3=True
                 # )
                 future_grippers = self.gripper_ensembler.update(
                     future_grippers, future_time, on_SO3=False
                 )
         
-        return future_ee_poses, future_grippers, future_time
+        return future_ee_poses, future_grippers
 

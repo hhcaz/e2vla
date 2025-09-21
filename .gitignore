@@ -212,3 +212,5 @@ data_converted/
 data_raw/
 tests/
 logs/
+eval_results/
+eval_videos/

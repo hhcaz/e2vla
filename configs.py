@@ -58,7 +58,7 @@ class TrainConfig(object):
     
     @classmethod
     def load(cls, path: str):
-        with open(path, "r") as fp:
+        with open(path, "r", encoding="utf-8") as fp:
             items = json.load(fp)
         return cls(**items)
 
@@ -71,25 +71,48 @@ CONFIGS["pretrain"] = TrainConfig(
         datasets.Maniskill,
         datasets.MetaWorld,
     ],
-    dataset_weights=[1, 1, 10]
+    dataset_weights=[10, 1, 1]
+)
+CONFIGS["pretrain_extra"] = TrainConfig(
+    dataset_classes=[
+        datasets.Droid,
+        datasets.Maniskill,
+        datasets.MetaWorld,
+        datasets.PickPlaceCan,
+        datasets.OpenDrawer,
+        datasets.OpenOven,
+    ],
+    dataset_weights=[10, 1, 1, 1, 1, 1]
 )
 CONFIGS["finetune_libero_spatial"] = TrainConfig(
     dataset_classes=[datasets.LiberoSpatial],
     dataset_weights=[1],
-    sample_multiplex=1000
+    sample_multiplex=1000,
+    num_warmup=int(2e3),
+    save_interval=int(10e3),
+    max_iterations=int(70e3),
 )
 CONFIGS["finetune_libero_object"] = TrainConfig(
     dataset_classes=[datasets.LiberoObject],
     dataset_weights=[1],
-    sample_multiplex=1000
+    sample_multiplex=1000,
+    num_warmup=int(2e3),
+    save_interval=int(10e3),
+    max_iterations=int(70e3),
 )
 CONFIGS["finetune_libero_goal"] = TrainConfig(
     dataset_classes=[datasets.LiberoGoal],
     dataset_weights=[1],
-    sample_multiplex=1000
+    sample_multiplex=1000,
+    num_warmup=int(2e3),
+    save_interval=int(10e3),
+    max_iterations=int(70e3),
 )
 CONFIGS["finetune_libero_10"] = TrainConfig(
     dataset_classes=[datasets.Libero10],
     dataset_weights=[1],
-    sample_multiplex=1000
+    sample_multiplex=1000,
+    num_warmup=int(2e3),
+    save_interval=int(10e3),
+    max_iterations=int(70e3),
 )

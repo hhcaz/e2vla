@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import random
 import inspect
 import traceback
 from typing import Dict
@@ -201,6 +202,75 @@ class Droid(H5DatasetMapBase):
             
         out = self.adjust_ee_pose(out)
         return out
+
+
+class PickPlaceCan(H5DatasetMapBase):
+    config = DataConfig(
+        record_dt=None,
+        sample_dt=1.0,
+        output_image_hw=(256, 256),
+        ee_indices=(0,),
+        camera_names=("e2h_cam", "eih_cam")
+    )
+
+    def enrich_prompt(self, lang: str):
+        prompts = {
+            "7up01": ["green can", "green bottle", "green soda"],
+            "Coke01": ["red can", "red bottle", "red soda", "red Coca Cola"],
+            "Pepsi01": ["blue can", "blue bottle", "blue soda", "blue Pepsi"],
+            "Pepsi02": ["black can", "black bottle", "black soda", "black Pepsi"]
+        }
+        return random.sample(prompts[lang], k=1)[0]
+    
+    def __getitem__(self, i):
+        out = super().__getitem__(i)
+        template = "move the {} to the plate"
+        out["prompt_text"] = template.format(self.enrich_prompt(out["prompt_text"]))
+        return out
+    
+    @classmethod
+    def inst(cls):
+        h5_files = glob.glob("./data_converted/pick-place-can/*.h5")
+        print("[INFO] num samples of {}: {}".format(cls.__name__, len(h5_files)))
+        assert len(h5_files) > 0
+        h5_files.sort()
+        return cls(h5_files)
+
+
+class OpenDrawer(H5DatasetMapBase):
+    config = DataConfig(
+        record_dt=None,
+        sample_dt=1.0,
+        output_image_hw=(256, 256),
+        ee_indices=(0,),
+        camera_names=("agent_camera",)
+    )
+
+    @classmethod
+    def inst(cls):
+        h5_files = glob.glob("./data_converted/drawer/*.h5")
+        print("[INFO] num samples of {}: {}".format(cls.__name__, len(h5_files)))
+        assert len(h5_files) > 0
+        h5_files.sort()
+        return cls(h5_files)
+
+
+class OpenOven(H5DatasetMapBase):
+    config = DataConfig(
+        record_dt=None,
+        sample_dt=1.0,
+        output_image_hw=(256, 256),
+        ee_indices=(0,),
+        camera_names=("agent_camera",)
+    )
+
+    @classmethod
+    def inst(cls):
+        h5_files = glob.glob("./data_converted/oven/*.h5")
+        print("[INFO] num samples of {}: {}".format(cls.__name__, len(h5_files)))
+        assert len(h5_files) > 0
+        h5_files.sort()
+        return cls(h5_files)
 
 
 def get_subclasses(base_class):
